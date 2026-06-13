@@ -2,514 +2,810 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>🐍 Neon Snake</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover, maximum-scale=1.0">
+<title>🚀 Space Defender</title>
 <style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
-body {
-  background: #0a0a1a;
+:root {
+  --gap: 6px;
+  --pad: min(10px, 2vw);
+}
+
+html, body {
+  width: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  background: #06060f;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  color: #e0e0e0;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* ===== LAYOUT ===== */
+#shell {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100dvh;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: env(safe-area-inset-top, 0) env(safe-area-inset-right, 0) env(safe-area-inset-bottom, 0) env(safe-area-inset-left, 0);
+}
+
+/* Status bar — fixed height */
+#status {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--pad);
+  gap: var(--gap);
+}
+
+.stat-pill {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 4px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  font-size: clamp(12px, 3.2vw, 15px);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.stat-pill .label { opacity: 0.5; font-size: 0.85em; }
+.stat-pill .value { font-variant-numeric: tabular-nums; }
+.pill-score .value { color: #4ade80; }
+.pill-wave .value { color: #60a5fa; }
+.pill-lives .value { color: #f87171; }
+
+/* Game canvas — fills remaining space */
+#canvas-wrap {
+  flex: 1 1 auto;
+  position: relative;
+  min-height: 0;
+  margin: 0 var(--pad);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1.5px solid rgba(96,165,250,0.25);
+  box-shadow: 0 0 40px rgba(96,165,250,0.08);
+}
+
+canvas#game {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Controls bar — fixed height */
+#controls {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+  gap: var(--gap);
+  padding: var(--pad);
+}
+
+.ctrl-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: none;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.07);
+  border: 1.5px solid rgba(255,255,255,0.1);
+  color: #ccc;
+  font-size: clamp(20px, 6vw, 28px);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.1s, border-color 0.1s;
+  touch-action: manipulation;
+}
+
+.ctrl-btn .btn-label {
+  font-size: clamp(10px, 2.8vw, 12px);
+  font-weight: 600;
+  opacity: 0.5;
+  letter-spacing: 0.3px;
+}
+
+.ctrl-btn:active, .ctrl-btn.active {
+  background: rgba(96,165,250,0.2);
+  border-color: #60a5fa;
+  color: #60a5fa;
+}
+
+.ctrl-btn.fire:active, .ctrl-btn.fire.active {
+  background: rgba(248,113,113,0.25);
+  border-color: #f87171;
+  color: #f87171;
+}
+
+/* ===== SCREENS (overlay on canvas) ===== */
+.screen {
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100dvh;
-  overflow: hidden;
-  font-family: 'Segoe UI', system-ui, sans-serif;
-  color: #fff;
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-#game-container {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  max-width: 500px;
-  padding: 10px;
-}
-
-#hud {
-  display: flex;
-  justify-content: space-between;
-  width: 100%;
-  padding: 8px 16px;
-  background: rgba(255,255,255,0.05);
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.1);
-}
-
-#hud span {
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: 1px;
-}
-
-#score-val { color: #00ff88; text-shadow: 0 0 10px #00ff88; }
-#high-val { color: #ffaa00; text-shadow: 0 0 10px #ffaa00; }
-#level-val { color: #00ccff; text-shadow: 0 0 10px #00ccff; }
-
-canvas {
-  border-radius: 12px;
-  border: 2px solid rgba(0, 255, 136, 0.3);
-  box-shadow: 0 0 30px rgba(0, 255, 136, 0.15), inset 0 0 30px rgba(0,0,0,0.5);
-  width: 100%;
-  max-width: 400px;
-  aspect-ratio: 1;
-  display: block;
-}
-
-#overlay {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  gap: 14px;
+  background: rgba(6,6,15,0.88);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 20;
   text-align: center;
-  z-index: 10;
-  width: 90%;
+  padding: 20px;
+  transition: opacity 0.3s;
 }
 
-#overlay h1 {
-  font-size: 42px;
+.screen[hidden] { display: none; }
+
+.screen h1 {
+  font-size: clamp(28px, 8vw, 40px);
   font-weight: 900;
-  background: linear-gradient(135deg, #00ff88, #00ccff, #ff00ff);
+  background: linear-gradient(135deg, #4ade80, #60a5fa, #a78bfa);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  margin-bottom: 8px;
-  filter: drop-shadow(0 0 20px rgba(0,255,136,0.5));
+  line-height: 1.2;
 }
 
-#overlay p {
-  font-size: 14px;
-  color: rgba(255,255,255,0.6);
-  margin-bottom: 20px;
+.screen .subtitle {
+  font-size: clamp(13px, 3.5vw, 15px);
+  color: rgba(255,255,255,0.5);
   line-height: 1.5;
+  max-width: 300px;
 }
 
-#overlay .final-score {
-  font-size: 28px;
-  color: #00ff88;
+.screen .score-display {
+  font-size: clamp(36px, 10vw, 52px);
+  font-weight: 900;
+  color: #4ade80;
+  text-shadow: 0 0 30px rgba(74,222,128,0.4);
+  font-variant-numeric: tabular-nums;
+}
+
+.screen .score-label {
+  font-size: 13px;
+  color: rgba(255,255,255,0.4);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.screen .stats-row {
+  display: flex;
+  gap: 24px;
+  margin: 4px 0;
+}
+
+.screen .stats-row div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.screen .stats-row .num {
+  font-size: 20px;
   font-weight: 800;
-  margin: 10px 0;
-  text-shadow: 0 0 15px #00ff88;
+  color: #60a5fa;
+  font-variant-numeric: tabular-nums;
 }
 
-#start-btn {
-  padding: 14px 40px;
-  font-size: 18px;
-  font-weight: 700;
+.screen .stats-row .lbl {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(255,255,255,0.35);
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 14px 36px;
+  font-size: clamp(16px, 4vw, 18px);
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: #06060f;
+  background: linear-gradient(135deg, #4ade80, #60a5fa);
   border: none;
   border-radius: 50px;
-  background: linear-gradient(135deg, #00ff88, #00ccff);
-  color: #0a0a1a;
   cursor: pointer;
-  transition: all 0.3s;
-  box-shadow: 0 0 25px rgba(0,255,136,0.4);
-  letter-spacing: 1px;
-}
-
-#start-btn:hover, #start-btn:active {
-  transform: scale(1.05);
-  box-shadow: 0 0 40px rgba(0,255,136,0.6);
-}
-
-/* D-Pad for mobile */
-#dpad {
-  display: grid;
-  grid-template-columns: 64px 64px 64px;
-  grid-template-rows: 64px 64px 64px;
-  gap: 4px;
-  margin-top: 8px;
-}
-
-.dpad-btn {
-  width: 64px;
-  height: 64px;
-  border-radius: 16px;
-  border: 2px solid rgba(255,255,255,0.15);
-  background: rgba(255,255,255,0.07);
-  color: rgba(255,255,255,0.7);
-  font-size: 26px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.15s;
+  box-shadow: 0 4px 25px rgba(96,165,250,0.35);
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: transform 0.1s, box-shadow 0.2s;
 }
 
-.dpad-btn:active {
-  background: rgba(0,255,136,0.3);
-  border-color: #00ff88;
-  color: #00ff88;
-  transform: scale(0.92);
-}
-
-.dpad-btn.empty { background: none; border: none; cursor: default; }
-
-#pause-btn {
-  position: absolute;
-  top: 60px;
-  right: 16px;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.2);
-  background: rgba(255,255,255,0.08);
-  color: #fff;
-  font-size: 18px;
-  cursor: pointer;
-  z-index: 5;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-@media (min-width: 768px) {
-  #dpad { display: none; }
+.btn-primary:active {
+  transform: scale(0.95);
+  box-shadow: 0 2px 15px rgba(96,165,250,0.3);
 }
 </style>
 </head>
 <body>
-<div id="game-container">
-  <div id="hud">
-    <span>🐍 <span id="score-val">0</span></span>
-    <span>LV <span id="level-val">1</span></span>
-    <span>👑 <span id="high-val">0</span></span>
+
+<div id="shell">
+  <!-- Status Bar -->
+  <div id="status">
+    <div class="stat-pill pill-score">
+      <span class="label">SCORE</span>
+      <span class="value" id="score-el">0</span>
+    </div>
+    <div class="stat-pill pill-wave">
+      <span class="label">WAVE</span>
+      <span class="value" id="wave-el">1</span>
+    </div>
+    <div class="stat-pill pill-lives">
+      <span class="label">LIVES</span>
+      <span class="value" id="lives-el">♥♥♥</span>
+    </div>
   </div>
 
-  <button id="pause-btn" ontouchstart="togglePause(); event.stopPropagation()" onclick="togglePause()">⏸</button>
+  <!-- Game Canvas -->
+  <div id="canvas-wrap">
+    <canvas id="game"></canvas>
 
-  <canvas id="game"></canvas>
+    <!-- START SCREEN -->
+    <div class="screen" id="start-screen">
+      <h1>🚀 SPACE<br>DEFENDER</h1>
+      <p class="subtitle">Move your ship to dodge asteroids.<br>Tap FIRE to shoot them down!<br>Survive as many waves as you can.</p>
+      <button class="btn-primary" id="start-btn">▶ START GAME</button>
+    </div>
 
-  <div id="overlay">
-    <h1>🐍 NEON SNAKE</h1>
-    <p>Eat food to grow.<br>Avoid walls & yourself!</p>
-    <button id="start-btn" ontouchstart="startGame(); event.stopPropagation()" onclick="startGame()">PLAY</button>
+    <!-- PAUSE SCREEN -->
+    <div class="screen" id="pause-screen" hidden>
+      <h1>⏸ PAUSED</h1>
+      <button class="btn-primary" id="resume-btn">▶ RESUME</button>
+    </div>
+
+    <!-- GAME OVER SCREEN -->
+    <div class="screen" id="over-screen" hidden>
+      <h1>💥 GAME OVER</h1>
+      <div class="score-display" id="final-score">0</div>
+      <div class="score-label">final score</div>
+      <div class="stats-row">
+        <div>
+          <span class="num" id="final-wave">1</span>
+          <span class="lbl">Wave</span>
+        </div>
+        <div>
+          <span class="num" id="final-destroyed">0</span>
+          <span class="lbl">Destroyed</span>
+        </div>
+        <div>
+          <span class="num" id="final-best">0</span>
+          <span class="lbl">Best</span>
+        </div>
+      </div>
+      <button class="btn-primary" id="retry-btn">↻ PLAY AGAIN</button>
+    </div>
   </div>
 
-  <div id="dpad">
-    <div class="dpad-btn empty"></div>
-    <div class="dpad-btn" ontouchstart="setDir(0,-1); event.stopPropagation()" onclick="setDir(0,-1)">▲</div>
-    <div class="dpad-btn empty"></div>
-    <div class="dpad-btn" ontouchstart="setDir(-1,0); event.stopPropagation()" onclick="setDir(-1,0)">◀</div>
-    <div class="dpad-btn empty"></div>
-    <div class="dpad-btn" ontouchstart="setDir(1,0); event.stopPropagation()" onclick="setDir(1,0)">▶</div>
-    <div class="dpad-btn empty"></div>
-    <div class="dpad-btn" ontouchstart="setDir(0,1); event.stopPropagation()" onclick="setDir(0,1)">▼</div>
-    <div class="dpad-btn empty"></div>
+  <!-- Control Buttons -->
+  <div id="controls">
+    <button class="ctrl-btn" id="btn-left">
+      <span>◀</span>
+      <span class="btn-label">LEFT</span>
+    </button>
+    <button class="ctrl-btn fire" id="btn-fire">
+      <span>🔥</span>
+      <span class="btn-label">FIRE</span>
+    </button>
+    <button class="ctrl-btn" id="btn-right">
+      <span>▶</span>
+      <span class="btn-label">RIGHT</span>
+    </button>
   </div>
 </div>
 
 <script>
-const canvas = document.getElementById('game');
-const ctx = canvas.getContext('2d');
-const overlay = document.getElementById('overlay');
-const startBtn = document.getElementById('start-btn');
-const pauseBtn = document.getElementById('pause-btn');
+(function () {
+  'use strict';
 
-// High-DPI setup
-const GRID = 20;
-let COLS, ROWS, CELL, W, H;
+  /* ========== CANVAS ========== */
+  const wrap = document.getElementById('canvas-wrap');
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  let W, H, dpr;
 
-function resize() {
-  const rect = canvas.getBoundingClientRect();
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  canvas.width = rect.width * dpr;
-  canvas.height = rect.height * dpr;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  W = rect.width;
-  H = rect.height;
-  CELL = Math.floor(Math.min(W, H) / GRID);
-  COLS = GRID;
-  ROWS = GRID;
-  // Center the grid
-  offsetX = Math.floor((W - COLS * CELL) / 2);
-  offsetY = Math.floor((H - ROWS * CELL) / 2);
-}
-let offsetX = 0, offsetY = 0;
-resize();
-window.addEventListener('resize', resize);
-
-// Game state
-let snake, dir, nextDir, food, score, highScore, level, speed;
-let running = false;
-let paused = false;
-let gameLoop;
-let particles = [];
-
-highScore = parseInt(localStorage.getItem('neonSnakeHigh') || '0');
-document.getElementById('high-val').textContent = highScore;
-
-function startGame() {
+  function resize() {
+    const rect = wrap.getBoundingClientRect();
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = rect.width;
+    H = rect.height;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
   resize();
-  const startX = Math.floor(COLS / 2);
-  const startY = Math.floor(ROWS / 2);
-  snake = [
-    { x: startX, y: startY },
-    { x: startX - 1, y: startY },
-    { x: startX - 2, y: startY },
-  ];
-  dir = { x: 1, y: 0 };
-  nextDir = { x: 1, y: 0 };
-  score = 0;
-  level = 1;
-  speed = 150;
-  paused = false;
-  particles = [];
-  overlay.style.display = 'none';
-  pauseBtn.style.display = 'flex';
-  spawnFood();
-  updateHUD();
-  running = true;
-  if (gameLoop) clearInterval(gameLoop);
-  gameLoop = setInterval(tick, speed);
-  requestAnimationFrame(render);
-}
+  window.addEventListener('resize', resize);
 
-function spawnFood() {
-  let pos;
-  do {
-    pos = {
-      x: Math.floor(Math.random() * COLS),
-      y: Math.floor(Math.random() * ROWS)
-    };
-  } while (snake.some(s => s.x === pos.x && s.y === pos.y));
-  food = pos;
-}
+  /* ========== STATE ========== */
+  const STATE = { start: 0, playing: 1, paused: 2, over: 3 };
+  let state = STATE.start;
 
-function tick() {
-  if (paused) return;
-  dir = nextDir;
-  const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+  let score = 0;
+  let wave = 1;
+  let lives = 3;
+  let destroyed = 0;
+  let bestScore = parseInt(localStorage.getItem('sd_best') || '0');
 
-  // Wall collision
-  if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) {
-    return gameOver();
-  }
-  // Self collision
-  if (snake.some(s => s.x === head.x && s.y === head.y)) {
-    return gameOver();
-  }
+  // Player
+  let player = { x: 0, y: 0, w: 36, h: 36, speed: 5 };
+  let moveLeft = false;
+  let moveRight = false;
 
-  snake.unshift(head);
+  // Game objects
+  let bullets = [];
+  let enemies = [];
+  let particles = [];
+  let stars = [];
 
-  if (head.x === food.x && head.y === food.y) {
-    score += 10 * level;
-    // Particles
-    for (let i = 0; i < 12; i++) {
-      particles.push({
-        x: offsetX + food.x * CELL + CELL / 2,
-        y: offsetY + food.y * CELL + CELL / 2,
-        vx: (Math.random() - 0.5) * 8,
-        vy: (Math.random() - 0.5) * 8,
-        life: 1,
-        color: ['#00ff88', '#00ccff', '#ff00ff', '#ffaa00'][Math.floor(Math.random() * 4)]
+  // Timing
+  let lastTime = 0;
+  let enemyTimer = 0;
+  let shootCooldown = 0;
+  let animId = null;
+
+  /* ========== STARS (background) ========== */
+  function initStars() {
+    stars = [];
+    for (let i = 0; i < 80; i++) {
+      stars.push({
+        x: Math.random() * W,
+        y: Math.random() * H,
+        r: Math.random() * 1.5 + 0.3,
+        speed: Math.random() * 0.4 + 0.1,
+        bright: Math.random()
       });
     }
-    spawnFood();
-    // Level up every 50 points
-    const newLevel = Math.floor(score / 50) + 1;
-    if (newLevel > level) {
-      level = newLevel;
-      speed = Math.max(60, 150 - (level - 1) * 15);
-      clearInterval(gameLoop);
-      gameLoop = setInterval(tick, speed);
+  }
+
+  /* ========== HELPERS ========== */
+  function spawnEnemy() {
+    const size = Math.random() * 16 + 14;
+    enemies.push({
+      x: Math.random() * (W - size * 2) + size,
+      y: -size,
+      r: size,
+      speed: (Math.random() * 1.2 + 0.6) * (1 + wave * 0.15),
+      rot: 0,
+      rotSpeed: (Math.random() - 0.5) * 0.08,
+      vertices: makeAsteroidVerts(size)
+    });
+  }
+
+  function makeAsteroidVerts(r) {
+    const verts = [];
+    const n = 8 + Math.floor(Math.random() * 5);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      const d = r * (0.7 + Math.random() * 0.3);
+      verts.push({ a, d });
     }
+    return verts;
+  }
+
+  function makeExplosion(x, y, r, color) {
+    const count = Math.floor(r * 1.5) + 8;
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = Math.random() * 3 + 1;
+      particles.push({
+        x, y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        life: 1,
+        decay: 0.015 + Math.random() * 0.02,
+        r: Math.random() * 3 + 1,
+        color
+      });
+    }
+  }
+
+  function shoot() {
+    if (shootCooldown > 0) return;
+    bullets.push({
+      x: player.x,
+      y: player.y - player.h / 2 - 4,
+      w: 4,
+      h: 14,
+      speed: 9
+    });
+    shootCooldown = 12; // frames
+  }
+
+  function damagePlayer() {
+    lives--;
     updateHUD();
-  } else {
-    snake.pop();
-  }
-}
-
-function gameOver() {
-  running = false;
-  clearInterval(gameLoop);
-  if (score > highScore) {
-    highScore = score;
-    localStorage.setItem('neonSnakeHigh', highScore);
-    document.getElementById('high-val').textContent = highScore;
-  }
-  pauseBtn.style.display = 'none';
-  overlay.style.display = 'block';
-  overlay.innerHTML = `
-    <h1>💀 GAME OVER</h1>
-    <div class="final-score">Score: ${score}</div>
-    <p>Level ${level} reached!</p>
-    <button id="start-btn" ontouchstart="startGame(); event.stopPropagation()" onclick="startGame()">PLAY AGAIN</button>
-  `;
-}
-
-function updateHUD() {
-  document.getElementById('score-val').textContent = score;
-  document.getElementById('level-val').textContent = level;
-}
-
-function setDir(x, y) {
-  if (!running) return;
-  // Prevent 180° reversal
-  if (dir.x === -x && dir.y === -y) return;
-  if (x !== 0 && dir.x === x) return;
-  if (y !== 0 && dir.y === y) return;
-  nextDir = { x, y };
-}
-
-function togglePause() {
-  if (!running) return;
-  paused = !paused;
-  pauseBtn.textContent = paused ? '▶' : '⏸';
-}
-
-// Keyboard
-document.addEventListener('keydown', e => {
-  const map = {
-    ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
-    w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0],
-    W: [0, -1], S: [0, 1], A: [-1, 0], D: [1, 0],
-  };
-  if (map[e.key]) { setDir(...map[e.key]); e.preventDefault(); }
-  if (e.key === ' ' || e.key === 'p') { togglePause(); e.preventDefault(); }
-});
-
-// Swipe support
-let touchStart = null;
-canvas.addEventListener('touchstart', e => { touchStart = e.touches[0]; }, { passive: true });
-canvas.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
-canvas.addEventListener('touchend', e => {
-  if (!touchStart) return;
-  const dx = e.changedTouches[0].clientX - touchStart.clientX;
-  const dy = e.changedTouches[0].clientY - touchStart.clientY;
-  if (Math.abs(dx) < 20 && Math.abs(dy) < 20) return;
-  if (Math.abs(dx) > Math.abs(dy)) {
-    setDir(dx > 0 ? 1 : -1, 0);
-  } else {
-    setDir(0, dy > 0 ? 1 : -1);
-  }
-  touchStart = null;
-}, { passive: true });
-
-// Render
-let foodPulse = 0;
-function render() {
-  ctx.clearRect(0, 0, W, H);
-
-  // Background grid
-  ctx.strokeStyle = 'rgba(255,255,255,0.03)';
-  ctx.lineWidth = 0.5;
-  for (let x = 0; x <= COLS; x++) {
-    ctx.beginPath();
-    ctx.moveTo(offsetX + x * CELL, offsetY);
-    ctx.lineTo(offsetX + x * CELL, offsetY + ROWS * CELL);
-    ctx.stroke();
-  }
-  for (let y = 0; y <= ROWS; y++) {
-    ctx.beginPath();
-    ctx.moveTo(offsetX, offsetY + y * CELL);
-    ctx.lineTo(offsetX + COLS * CELL, offsetY + y * CELL);
-    ctx.stroke();
+    makeExplosion(player.x, player.y, 30, '#f87171');
+    if (lives <= 0) gameOver();
   }
 
-  // Particles
-  particles = particles.filter(p => {
-    p.x += p.vx;
-    p.y += p.vy;
-    p.life -= 0.03;
-    if (p.life <= 0) return false;
-    ctx.globalAlpha = p.life;
-    ctx.fillStyle = p.color;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, 3 * p.life, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-    return true;
-  });
+  function updateHUD() {
+    document.getElementById('score-el').textContent = score;
+    document.getElementById('wave-el').textContent = wave;
+    document.getElementById('lives-el').textContent = '♥'.repeat(Math.max(0, lives));
+  }
 
-  // Food
-  foodPulse += 0.08;
-  const pulse = 1 + Math.sin(foodPulse) * 0.15;
-  const fx = offsetX + food.x * CELL + CELL / 2;
-  const fy = offsetY + food.y * CELL + CELL / 2;
-  const fr = (CELL / 2 - 2) * pulse;
+  function showScreen(id) {
+    ['start-screen', 'pause-screen', 'over-screen'].forEach(s => {
+      document.getElementById(s).hidden = (s !== id);
+    });
+  }
 
-  ctx.shadowColor = '#ff00ff';
-  ctx.shadowBlur = 20;
-  ctx.fillStyle = '#ff00ff';
-  ctx.beginPath();
-  ctx.arc(fx, fy, fr, 0, Math.PI * 2);
-  ctx.fill();
+  /* ========== GAME FLOW ========== */
+  function startGame() {
+    resize();
+    initStars();
+    score = 0;
+    wave = 1;
+    lives = 3;
+    destroyed = 0;
+    bullets = [];
+    enemies = [];
+    particles = [];
+    player.x = W / 2;
+    player.y = H - 60;
+    moveLeft = false;
+    moveRight = false;
+    enemyTimer = 0;
+    shootCooldown = 0;
+    updateHUD();
+    state = STATE.playing;
+    showScreen(null);
+    lastTime = performance.now();
+    if (!animId) animId = requestAnimationFrame(loop);
+  }
 
-  ctx.shadowColor = '#fff';
-  ctx.shadowBlur = 10;
-  ctx.fillStyle = '#ff88ff';
-  ctx.beginPath();
-  ctx.arc(fx, fy, fr * 0.5, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.shadowBlur = 0;
-
-  // Snake
-  snake.forEach((seg, i) => {
-    const x = offsetX + seg.x * CELL;
-    const y = offsetY + seg.y * CELL;
-    const t = i / snake.length;
-
-    // Body color gradient from head to tail
-    const r = Math.floor(0 + t * 0);
-    const g = Math.floor(255 - t * 100);
-    const b = Math.floor(136 + t * 100);
-    const color = `rgb(${r},${g},${b})`;
-
-    ctx.shadowColor = i === 0 ? '#00ff88' : color;
-    ctx.shadowBlur = i === 0 ? 18 : 8;
-
-    const radius = i === 0 ? 5 : 4;
-    const pad = 1;
-
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.roundRect(x + pad, y + pad, CELL - pad * 2, CELL - pad * 2, radius);
-    ctx.fill();
-
-    // Eyes on head
-    if (i === 0) {
-      ctx.shadowBlur = 0;
-      ctx.fillStyle = '#fff';
-      const ex1 = x + CELL / 2 + (dir.x * 3) + (dir.y * -2) - 2;
-      const ey1 = y + CELL / 2 + (dir.y * 3) + (dir.x * -2) - 2;
-      const ex2 = x + CELL / 2 + (dir.x * 3) + (dir.y * 2) - 2;
-      const ey2 = y + CELL / 2 + (dir.y * 3) + (dir.x * 2) - 2;
-      ctx.beginPath();
-      ctx.arc(ex1, ey1, 2.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(ex2, ey2, 2.5, 0, Math.PI * 2);
-      ctx.fill();
+  function togglePause() {
+    if (state === STATE.playing) {
+      state = STATE.paused;
+      showScreen('pause-screen');
+    } else if (state === STATE.paused) {
+      state = STATE.playing;
+      showScreen(null);
+      lastTime = performance.now();
     }
+  }
+
+  function gameOver() {
+    state = STATE.over;
+    if (score > bestScore) {
+      bestScore = score;
+      localStorage.setItem('sd_best', bestScore);
+    }
+    document.getElementById('final-score').textContent = score;
+    document.getElementById('final-wave').textContent = wave;
+    document.getElementById('final-destroyed').textContent = destroyed;
+    document.getElementById('final-best').textContent = bestScore;
+    showScreen('over-screen');
+  }
+
+  /* ========== MAIN LOOP ========== */
+  function loop(now) {
+    animId = requestAnimationFrame(loop);
+    const dt = Math.min((now - lastTime) / 16.667, 3); // normalize to ~60fps, cap at 3x
+    lastTime = now;
+
+    update(dt);
+    draw();
+  }
+
+  function update(dt) {
+    // Always update particles & stars for visual continuity
+    // Stars
+    stars.forEach(s => {
+      s.y += s.speed * dt;
+      if (s.y > H) { s.y = 0; s.x = Math.random() * W; }
+    });
+
+    // Particles
+    particles = particles.filter(p => {
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vx *= 0.97;
+      p.vy *= 0.97;
+      p.life -= p.decay * dt;
+      return p.life > 0;
+    });
+
+    if (state !== STATE.playing) return;
+
+    // Cooldowns
+    if (shootCooldown > 0) shootCooldown -= dt;
+
+    // Player movement
+    if (moveLeft) player.x -= player.speed * dt;
+    if (moveRight) player.x += player.speed * dt;
+    player.x = Math.max(player.w / 2, Math.min(W - player.w / 2, player.x));
+
+    // Auto-fire (held down)
+    if (fireHeld) shoot();
+
+    // Bullets
+    bullets = bullets.filter(b => {
+      b.y -= b.speed * dt;
+      return b.y > -20;
+    });
+
+    // Enemies
+    enemyTimer -= dt;
+    if (enemyTimer <= 0) {
+      const spawnCount = Math.min(1 + Math.floor(wave / 3), 4);
+      for (let i = 0; i < spawnCount; i++) spawnEnemy();
+      enemyTimer = Math.max(20, 80 - wave * 5);
+    }
+
+    enemies = enemies.filter(e => {
+      e.y += e.speed * dt;
+      e.rot += e.rotSpeed * dt;
+      return e.y < H + e.r * 2;
+    });
+
+    // Collision: bullets vs enemies
+    for (let bi = bullets.length - 1; bi >= 0; bi--) {
+      const b = bullets[bi];
+      let hit = false;
+      for (let ei = enemies.length - 1; ei >= 0; ei--) {
+        const e = enemies[ei];
+        const dx = b.x - e.x;
+        const dy = b.y - e.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < e.r + b.w) {
+          // Hit!
+          makeExplosion(e.x, e.y, e.r, '#60a5fa');
+          enemies.splice(ei, 1);
+          score += 10 * wave;
+          destroyed++;
+          hit = true;
+
+          // Wave progression
+          if (destroyed % 15 === 0) {
+            wave++;
+            updateHUD();
+          }
+          break;
+        }
+      }
+      if (hit) bullets.splice(bi, 1);
+    }
+
+    // Collision: enemies vs player
+    for (let ei = enemies.length - 1; ei >= 0; ei--) {
+      const e = enemies[ei];
+      const dx = e.x - player.x;
+      const dy = e.y - player.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < e.r + player.w * 0.4) {
+        makeExplosion(e.x, e.y, e.r * 0.8, '#60a5fa');
+        enemies.splice(ei, 1);
+        damagePlayer();
+      }
+    }
+
+    // Enemies passing bottom = penalty
+    for (let ei = enemies.length - 1; ei >= 0; ei--) {
+      if (enemies[ei].y > H + enemies[ei].r) {
+        enemies.splice(ei, 1);
+        damagePlayer();
+      }
+    }
+
+    updateHUD();
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+
+    // Stars
+    stars.forEach(s => {
+      ctx.globalAlpha = 0.3 + s.bright * 0.5;
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+
+    // Enemies (asteroids)
+    enemies.forEach(e => {
+      ctx.save();
+      ctx.translate(e.x, e.y);
+      ctx.rotate(e.rot);
+
+      // Body
+      ctx.fillStyle = '#1e293b';
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      e.vertices.forEach((v, i) => {
+        const x = Math.cos(v.a) * v.d;
+        const y = Math.sin(v.a) * v.d;
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      });
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Danger glow
+      ctx.shadowColor = '#f87171';
+      ctx.shadowBlur = 12;
+      ctx.strokeStyle = 'rgba(248,113,113,0.3)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      ctx.restore();
+    });
+
+    // Bullets
+    bullets.forEach(b => {
+      ctx.shadowColor = '#4ade80';
+      ctx.shadowBlur = 10;
+      ctx.fillStyle = '#4ade80';
+      ctx.fillRect(b.x - b.w / 2, b.y - b.h / 2, b.w, b.h);
+    });
+    ctx.shadowBlur = 0;
+
+    // Particles
+    particles.forEach(p => {
+      ctx.globalAlpha = p.life;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r * p.life, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+
+    // Player ship (only when playing or paused)
+    if (state === STATE.playing || state === STATE.paused || state === STATE.over) {
+      const px = player.x;
+      const py = player.y;
+
+      ctx.save();
+      ctx.translate(px, py);
+
+      // Engine glow
+      ctx.shadowColor = '#60a5fa';
+      ctx.shadowBlur = 15;
+      ctx.fillStyle = '#60a5fa';
+      ctx.beginPath();
+      ctx.ellipse(0, player.h / 2 + 6, 6, 10 + Math.random() * 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // Ship body
+      ctx.fillStyle = '#3b82f6';
+      ctx.strokeStyle = '#93c5fd';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(0, -player.h / 2);
+      ctx.lineTo(-player.w / 2, player.h / 2);
+      ctx.lineTo(-player.w / 4, player.h / 3);
+      ctx.lineTo(player.w / 4, player.h / 3);
+      ctx.lineTo(player.w / 2, player.h / 2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Cockpit
+      ctx.fillStyle = '#93c5fd';
+      ctx.beginPath();
+      ctx.moveTo(0, -player.h / 4);
+      ctx.lineTo(-6, player.h / 6);
+      ctx.lineTo(6, player.h / 6);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.restore();
+    }
+  }
+
+  /* ========== TOUCH CONTROLS ========== */
+  let fireHeld = false;
+
+  function addBtnHandlers(btn, onDown, onUp) {
+    // Touch events — use { passive: false } so we can call preventDefault
+    btn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      btn.classList.add('active');
+      onDown(e);
+    }, { passive: false });
+
+    btn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      btn.classList.remove('active');
+      onUp(e);
+    }, { passive: false });
+
+    btn.addEventListener('touchcancel', (e) => {
+      e.preventDefault();
+      btn.classList.remove('active');
+      onUp(e);
+    }, { passive: false });
+
+    // Mouse fallback
+    btn.addEventListener('mousedown', (e) => {
+      btn.classList.add('active');
+      onDown(e);
+    });
+    btn.addEventListener('mouseup', (e) => {
+      btn.classList.remove('active');
+      onUp(e);
+    });
+    btn.addEventListener('mouseleave', (e) => {
+      btn.classList.remove('active');
+      onUp(e);
+    });
+  }
+
+  addBtnHandlers(
+    document.getElementById('btn-left'),
+    () => { moveLeft = true; },
+    () => { moveLeft = false; }
+  );
+
+  addBtnHandlers(
+    document.getElementById('btn-right'),
+    () => { moveRight = true; },
+    () => { moveRight = false; }
+  );
+
+  addBtnHandlers(
+    document.getElementById('btn-fire'),
+    () => {
+      fireHeld = true;
+      if (state === STATE.playing) shoot();
+    },
+    () => { fireHeld = false; }
+  );
+
+  // Button screen handlers
+  document.getElementById('start-btn').addEventListener('click', startGame);
+  document.getElementById('resume-btn').addEventListener('click', togglePause);
+  document.getElementById('retry-btn').addEventListener('click', startGame);
+
+  // Keyboard
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft' || e.key === 'a') moveLeft = true;
+    if (e.key === 'ArrowRight' || e.key === 'd') moveRight = true;
+    if (e.key === ' ' || e.key === 'ArrowUp') { shoot(); e.preventDefault(); }
+    if (e.key === 'p' || e.key === 'Escape') togglePause();
+  });
+  document.addEventListener('keyup', (e) => {
+    if (e.key === 'ArrowLeft' || e.key === 'a') moveLeft = false;
+    if (e.key === 'ArrowRight' || e.key === 'd') moveRight = false;
   });
 
-  ctx.shadowBlur = 0;
+  // Canvas tap-to-fire (tap on game area)
+  canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    if (state === STATE.playing) shoot();
+  }, { passive: false });
 
-  // Pause overlay
-  if (paused) {
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = '#00ff88';
-    ctx.font = 'bold 36px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('⏸ PAUSED', W / 2, H / 2);
-    ctx.font = '16px sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.fillText('Tap ▶ to resume', W / 2, H / 2 + 30);
-  }
-
-  if (running || particles.length > 0) {
-    requestAnimationFrame(render);
-  }
-}
+  /* ========== INIT ========== */
+  resize();
+  initStars();
+  lastTime = performance.now();
+  animId = requestAnimationFrame(loop);
+})();
 </script>
 </body>
 </html>
